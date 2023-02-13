@@ -55,6 +55,15 @@ parser.add_argument('--nosmooth', default=False, action='store_true',
 parser.add_argument('--base_face', type=str, 
 					help='Filepath of video/image that contains faces to use', required=True)
 
+parser.add_argument('--model_name', type=str, 
+					help='Filepath of video/image that contains faces to use', required=False, default='VGG-Face')
+
+parser.add_argument('--detector_backend', type=str,
+					help='Filepath of video/image that contains faces to use', required=False, default='opencv')
+
+parser.add_argument('--distance_metrics', type=str,
+					help='Filepath of video/image that contains faces to use', required=False, default='cosine')
+
 args = parser.parse_args()
 args.img_size = 96
 
@@ -95,7 +104,7 @@ def face_detect(images):
 	pady1, pady2, padx1, padx2 = args.pads
 	for i, image in enumerate(tqdm(images)):
 		try:
-			result= DeepFace.verify(cv2.imread(args.base_face), image)
+			result= DeepFace.verify(cv2.imread(args.base_face), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
 			y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
 			y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
 			x1 = max(0, result['facial_areas']['img2']['x'] - padx1)
