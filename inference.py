@@ -74,7 +74,6 @@ def face_detect(images):
 	detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
 											flip_input=False, device=device)
 
-	cnn_face_detector = dlib.cnn_face_detection_model_v1("/content/deepfake-dubbing/mmod_human_face_detector.dat")
 
 	batch_size = args.face_det_batch_size
 
@@ -94,7 +93,7 @@ def face_detect(images):
 
 	results = []
 	pady1, pady2, padx1, padx2 = args.pads
-	for i, image in enumerate(images):
+	for i, image in enumerate(tqdm(images)):
 		try:
 			result= DeepFace.verify(cv2.imread(args.base_face), image)
 			y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
