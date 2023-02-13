@@ -105,7 +105,7 @@ def face_detect(images):
 	for i, image in enumerate(tqdm(images)):
 		try:
 			result= DeepFace.verify(cv2.imread(args.base_face), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
-			if result["verified"]:
+			if "facial_areas" in result.keys() and "img2" in result['facial_areas'].keys():
 				y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
 				y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
 				x1 = max(0, result['facial_areas']['img2']['x'] - padx1)
