@@ -105,12 +105,15 @@ def face_detect(images):
 	for i, image in enumerate(tqdm(images)):
 		try:
 			result= DeepFace.verify(cv2.imread(args.base_face), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
-			y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
-			y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
-			x1 = max(0, result['facial_areas']['img2']['x'] - padx1)
-			x2 = min(image.shape[1], result['facial_areas']['img2']['x'] + result['facial_areas']['img2']['w'] + padx2)
-	
-			results.append([x1, y1, x2, y2])
+			if result["verified"]:
+				y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
+				y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
+				x1 = max(0, result['facial_areas']['img2']['x'] - padx1)
+				x2 = min(image.shape[1], result['facial_areas']['img2']['x'] + result['facial_areas']['img2']['w'] + padx2)
+		
+				results.append([x1, y1, x2, y2])
+			else: 
+				results.append([0, 0, 0, 0])
 
 		except:
 			raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')

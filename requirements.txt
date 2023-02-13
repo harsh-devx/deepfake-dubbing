@@ -13,7 +13,6 @@ lmdb
 pyyaml
 scipy
 tb-nightly
-deepface
 yapf
 realesrgan
 
