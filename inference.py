@@ -200,26 +200,24 @@ def load_model(path):
 	model = model.to(device)
 	return model.eval()
 
-def main():
-	if not os.path.isfile(args.face):
-		raise ValueError('--face argument must be a valid path to video/image file')
+def helper(start_time_seconds, end_time_seconds):
+	video_stream = cv2.VideoCapture(args.face)
+	fps = video_stream.get(cv2.CAP_PROP_FPS)
+	start_frame = int(start_time_seconds * fps)
+	end_frame = int(end_time_seconds * fps)
 
-	elif args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
-		full_frames = [cv2.imread(args.face)]
-		fps = args.fps
+	print('Reading video frames...')
 
-	else:
-		video_stream = cv2.VideoCapture(args.face)
-		fps = video_stream.get(cv2.CAP_PROP_FPS)
+	full_frames = []
+	frame_number=start_frame
+	while 1:
+		still_reading, frame = video_stream.read()
+		if not still_reading:
+			video_stream.release()
+			break
 
-		print('Reading video frames...')
+		if frame_number >= start_frame and frame_number <= end_frame:
 
-		full_frames = []
-		while 1:
-			still_reading, frame = video_stream.read()
-			if not still_reading:
-				video_stream.release()
-				break
 			if args.resize_factor > 1:
 				frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))
 
@@ -233,17 +231,20 @@ def main():
 			frame = frame[y1:y2, x1:x2]
 
 			full_frames.append(frame)
+			frame_number += 1
+
+		if frame_number>end_frame:
+			break
 
 	print ("Number of frames available for inference: "+str(len(full_frames)))
 
-	if not args.audio.endswith('.wav'):
-		print('Extracting raw audio...')
-		command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, 'temp/temp.wav')
+	sample_rate= 16000
+	wav = audio.load_wav(args.audio, sample_rate)
 
-		subprocess.call(command, shell=True)
-		args.audio = 'temp/temp.wav'
+	start_sample = int(start_time_seconds  * sample_rate)
+	end_sample = int(end_time_seconds  * sample_rate)
+	wav = wav[start_sample:end_sample]
 
-	wav = audio.load_wav(args.audio, 16000)
 	mel = audio.melspectrogram(wav)
 	print(mel.shape)
 
@@ -265,38 +266,72 @@ def main():
 
 	full_frames = full_frames[:len(mel_chunks)]
 
-	batch_size = args.wav2lip_batch_size
-	gen = datagen(full_frames.copy(), mel_chunks)
 
-	for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
-											total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
-		if i == 0:
-			model = load_model(args.checkpoint_path)
-			print ("Model loaded")
+
+	return full_frames, mel_chunks, fps
+
+def main():
+
+	if not args.audio.endswith('.wav'):
+		print('Extracting raw audio...')
+		command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, 'temp/temp.wav')
+
+		subprocess.call(command, shell=True)
+		args.audio = 'temp/temp.wav'
+
+	
+	if not os.path.isfile(args.face):
+		raise ValueError('--face argument must be a valid path to video/image file')
+
+	elif args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
+		full_frames = [cv2.imread(args.face)]
+		fps = args.fps
+
+	else:
+		
+
+		model = load_model(args.checkpoint_path)
+		print ("Model loaded")
+		batch_size = args.wav2lip_batch_size
+
+		starts= [0,2]
+		ends= [2,4]
+
+		for clips, (st, end) in enumerate(zip(starts, ends)):
+
+			start_time_seconds=st
+			end_time_seconds= end
+			full_frames, mel_chunks, fps = helper(start_time_seconds, end_time_seconds)
 
 			frame_h, frame_w = full_frames[0].shape[:-1]
-			out = cv2.VideoWriter('temp/result.avi', 
+
+			if clips == 0:
+				out = cv2.VideoWriter('temp/result.avi', 
 									cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
 
-		img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
-		mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
 
-		with torch.no_grad():
-			pred = model(mel_batch, img_batch)
+			gen = datagen(full_frames.copy(), mel_chunks)
+			for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
+															total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
 
-		pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
-		
-		for p, f, c in zip(pred, frames, coords):
-			y1, y2, x1, x2 = c
-			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
+				img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
+				mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
 
-			f[y1:y2, x1:x2] = p
-			out.write(f)
+				with torch.no_grad():
+					pred = model(mel_batch, img_batch)
 
-	out.release()
+				pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
+				
+				for p, f, c in zip(pred, frames, coords):
+					y1, y2, x1, x2 = c
+					p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 
-	command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio, 'temp/result.avi', args.outfile)
-	subprocess.call(command, shell=platform.system() != 'Windows')
+					f[y1:y2, x1:x2] = p
+					out.write(f)
+
+		out.release()
+		command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio, 'temp/result.avi', args.outfile)
+		subprocess.call(command, shell=platform.system() != 'Windows')
 
 if __name__ == '__main__':
 	main()
