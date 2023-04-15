@@ -209,7 +209,7 @@ def helper(start_time_seconds, end_time_seconds):
 	print('Reading video frames...')
 
 	full_frames = []
-	frame_number=start_frame
+	frame_number=0
 	while 1:
 		still_reading, frame = video_stream.read()
 		if not still_reading:
@@ -231,10 +231,10 @@ def helper(start_time_seconds, end_time_seconds):
 			frame = frame[y1:y2, x1:x2]
 
 			full_frames.append(frame)
-			frame_number += 1
+		if frame_number > end_frame:
+				break
 
-		if frame_number>end_frame:
-			break
+		frame_number += 1
 
 	print ("Number of frames available for inference: "+str(len(full_frames)))
 
