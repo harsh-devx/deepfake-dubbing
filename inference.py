@@ -30,6 +30,9 @@ parser.add_argument('--fps', type=float, help='Can be specified only if input is
 parser.add_argument('--pads', nargs='+', type=int, default=[0, 10, 0, 0], 
 					help='Padding (top, bottom, left, right). Please adjust to include chin at least')
 
+parser.add_argument('--transcript', nargs='+', type=float, default=[], 
+					help='transcript for the video', required=True)
+
 parser.add_argument('--face_det_batch_size', type=int, 
 					help='Batch size for face detection', default=16)
 parser.add_argument('--wav2lip_batch_size', type=int, help='Batch size for Wav2Lip model(s)', default=128)
@@ -52,7 +55,7 @@ parser.add_argument('--rotate', default=False, action='store_true',
 parser.add_argument('--nosmooth', default=False, action='store_true',
 					help='Prevent smoothing face detections over a short temporal window')
 
-parser.add_argument('--base_face', type=str, 
+parser.add_argument('--base_faces', type=dict, 
 					help='Filepath of video/image that contains faces to use', required=True)
 
 parser.add_argument('--model_name', type=str, 
@@ -79,7 +82,7 @@ def get_smoothened_boxes(boxes, T):
 		boxes[i] = np.mean(window, axis=0)
 	return boxes
 
-def face_detect(images):
+def face_detect(images, label):
 	detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
 											flip_input=False, device=device)
 
@@ -104,7 +107,7 @@ def face_detect(images):
 	pady1, pady2, padx1, padx2 = args.pads
 	for i, image in enumerate(tqdm(images)):
 		try:
-			result= DeepFace.verify(cv2.imread(args.base_face), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
+			result= DeepFace.verify(cv2.imread(args.base_faces[label]), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
 			if "facial_areas" in result.keys() and "img2" in result['facial_areas'].keys():
 				y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
 				y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
@@ -127,14 +130,14 @@ def face_detect(images):
 	del detector
 	return results 
 
-def datagen(frames, mels):
+def datagen(frames, mels, label):
 	img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
 
 	if args.box[0] == -1:
 		if not args.static:
-			face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
+			face_det_results = face_detect(frames, label) # BGR2RGB for CNN face detection
 		else:
-			face_det_results = face_detect([frames[0]])
+			face_det_results = face_detect([frames[0]], label)
 	else:
 		print('Using the specified bounding box instead of face detection...')
 		y1, y2, x1, x2 = args.box
@@ -294,13 +297,11 @@ def main():
 		print ("Model loaded")
 		batch_size = args.wav2lip_batch_size
 
-		starts= [0,2]
-		ends= [2,4]
 
-		for clips, (st, end) in enumerate(zip(starts, ends)):
+		for clips, t in enumerate(args.transcript):
 
-			start_time_seconds=st
-			end_time_seconds= end
+			start_time_seconds=t[0]
+			end_time_seconds= t[1]
 			full_frames, mel_chunks, fps = helper(start_time_seconds, end_time_seconds)
 
 			frame_h, frame_w = full_frames[0].shape[:-1]
@@ -310,7 +311,7 @@ def main():
 									cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
 
 
-			gen = datagen(full_frames.copy(), mel_chunks)
+			gen = datagen(full_frames.copy(), mel_chunks, t[2])
 			for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
 															total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
 
