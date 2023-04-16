@@ -31,7 +31,7 @@ parser.add_argument('--fps', type=float, help='Can be specified only if input is
 parser.add_argument('--pads', nargs='+', type=int, default=[0, 10, 0, 0], 
 					help='Padding (top, bottom, left, right). Please adjust to include chin at least')
 
-parser.add_argument('--transcript', nargs='+', type=float, default=[], 
+parser.add_argument('--transcript', type=str, 
 					help='transcript for the video', required=True)
 
 parser.add_argument('--face_det_batch_size', type=int, 
@@ -297,8 +297,14 @@ def main():
 		model = load_model(args.checkpoint_path)
 		print ("Model loaded")
 		batch_size = args.wav2lip_batch_size
-  
-		transcript = ast.literal_eval(args.transcript)
+		print(args.transcript)
+		with open(args.transcript, 'r') as f:
+			transcript = []
+			for line in f:
+				row = line.strip().split()
+				row[:2] = map(float, row[:2])
+				transcript.append(row)
+
 		for clips, t in enumerate(transcript):
 
 			start_time_seconds=t[0]
