@@ -9,6 +9,7 @@ from models import Wav2Lip
 import platform
 import dlib
 from deepface import DeepFace
+import ast
 
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
@@ -55,7 +56,7 @@ parser.add_argument('--rotate', default=False, action='store_true',
 parser.add_argument('--nosmooth', default=False, action='store_true',
 					help='Prevent smoothing face detections over a short temporal window')
 
-parser.add_argument('--base_faces', type=dict, 
+parser.add_argument('--base_faces_path', type=str, 
 					help='Filepath of video/image that contains faces to use', required=True)
 
 parser.add_argument('--model_name', type=str, 
@@ -107,7 +108,7 @@ def face_detect(images, label):
 	pady1, pady2, padx1, padx2 = args.pads
 	for i, image in enumerate(tqdm(images)):
 		try:
-			result= DeepFace.verify(cv2.imread(args.base_faces[label]), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
+			result= DeepFace.verify(cv2.imread(args.base_faces_path+label+".jpeg"), image, model_name=args.model_name, detector_backend=args.detector_backend, distance_metric=args.distance_metrics)
 			if "facial_areas" in result.keys() and "img2" in result['facial_areas'].keys():
 				y1 = max(0, result['facial_areas']['img2']['y'] - pady1)
 				y2 = min(image.shape[0], result['facial_areas']['img2']['y']+result['facial_areas']['img2']['h'] + pady2)
@@ -296,9 +297,9 @@ def main():
 		model = load_model(args.checkpoint_path)
 		print ("Model loaded")
 		batch_size = args.wav2lip_batch_size
-
-
-		for clips, t in enumerate(args.transcript):
+  
+		transcript = ast.literal_eval(args.transcript)
+		for clips, t in enumerate(transcript):
 
 			start_time_seconds=t[0]
 			end_time_seconds= t[1]
